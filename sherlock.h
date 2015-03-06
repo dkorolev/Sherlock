@@ -117,8 +117,7 @@ class StreamInstanceImpl {
     inline ListenerScope(WaitableAtomic<std::vector<T>>& data, F&& listener)
         : data_(data),
           listener_thread_(&ListenerScope::ListenerThread,
-                           std::move(std::unique_ptr<Internals>(
-                               new Internals(data, std::forward<F>(listener), external_terminate_flag_)))) {}
+                           new Internals(data, std::forward<F>(listener), external_terminate_flag_)) {}
 
     inline ~ListenerScope() {
       // Only do the extra termination work if the thread is not done and has not been joined or detached.
@@ -143,8 +142,8 @@ class StreamInstanceImpl {
     }
 
    private:
-    inline static void ListenerThread(std::unique_ptr<Internals>&& internals) {
-      std::unique_ptr<Internals> now_owned_internals = std::move(internals);
+    inline static void ListenerThread(Internals* p_raw_internals) {
+      std::unique_ptr<Internals> now_owned_internals(p_raw_internals);
       WaitableAtomic<std::vector<T>>& data = now_owned_internals->data;
       F&& listener = std::forward<F>(now_owned_internals->listener);
       bool& external_terminate_flag = now_owned_internals->flag;
