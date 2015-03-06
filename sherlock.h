@@ -5,8 +5,6 @@
 #include <string>
 #include <thread>
 
-#include <iostream>  // TODO(dkorolev): Remove this one.
-
 #include "waitable_atomic/waitable_atomic.h"
 
 // Sherlock is the overlord of data storage and processing in KnowSheet.
@@ -118,13 +116,11 @@ class StreamInstanceImpl {
     };
     inline ListenerScope(WaitableAtomic<std::vector<T>>& data, F&& listener)
         : data_(data),
-          listener_thread_(&ListenerScope::ListenerThread, std::move(std::unique_ptr<Internals>(new Internals(data, 
-                           std::forward<F>(listener),
-                           external_terminate_flag_)))) {
-            std::cerr << "ListenerScope constructed\n"; }
+          listener_thread_(&ListenerScope::ListenerThread,
+                           std::move(std::unique_ptr<Internals>(
+                               new Internals(data, std::forward<F>(listener), external_terminate_flag_)))) {}
 
     inline ~ListenerScope() {
-            std::cerr << "ListenerScope destructing.\n";
       // Only do the extra termination work if the thread is not done and has not been joined or detached.
       // No extra action is required in either of three cases outlined above.
       if (listener_thread_.joinable()) {
@@ -148,7 +144,6 @@ class StreamInstanceImpl {
 
    private:
     inline static void ListenerThread(std::unique_ptr<Internals>&& internals) {
-            std::cerr << "ListenerThread started\n";
       std::unique_ptr<Internals> now_owned_internals = std::move(internals);
       WaitableAtomic<std::vector<T>>& data = now_owned_internals->data;
       F&& listener = std::forward<F>(now_owned_internals->listener);

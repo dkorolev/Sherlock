@@ -38,6 +38,7 @@ SOFTWARE.
 DEFINE_int32(sherlock_http_test_port, 8090, "Local port to use for Sherlock unit test.");
 
 using std::string;
+using std::atomic_bool;
 using std::atomic_size_t;
 using std::thread;
 using std::this_thread::sleep_for;
@@ -86,7 +87,6 @@ struct WaitingProcessorOfSortOfInts {
   inline bool TerminationRequest() { return true; }
 };
 
-/*
 TEST(Sherlock, NiceProcessorOfInts) {
   auto foo_stream = sherlock::Stream<SortOfInt>("foo");
   foo_stream.Publish(1);
@@ -131,13 +131,11 @@ TEST(Sherlock, WaitingProcessorOfIntsReallyWaits) {
 
 // TODO(dkorolev): Support and test `CaughtUp()`: Add a few pre-populated plus a few delayed entries.
 
-*/
-
 struct Point {
   int x;
   int y;
   template <typename A>
-  void save(A& ar) const {
+  void serialize(A& ar) {
     ar(CEREAL_NVP(x), CEREAL_NVP(y));
   }
 };
@@ -147,24 +145,21 @@ template <typename T>
 class ServeJSONOverHTTP {
  public:
   ServeJSONOverHTTP(Request&& r)
-      : http_request_scope_(std::move(r)), http_response_(http_request_scope_.SendChunkedResponse()) {
- //       http_request_scope_("OK\n");
-        std::cerr << "CP1\n";
-        }
-        ~ServeJSONOverHTTP() {
-            std::cerr << "CP4\n";
-        }
+      : http_request_scope_(std::move(r)), http_response_(http_request_scope_.SendChunkedResponse()) {}
 
   inline bool Entry(const T& entry) {
-        std::cerr << "CP2\n";
-//    http_response_(JSON(entry));  // TODO(dkorolev): WTF do I have to say JSON() here?
-    return (n_ < 10);
+    http_response_(JSON(entry, "point"));  // TODO(dkorolev): WTF do I have to say JSON() here?
+    ++n_;
+    keep_going_ = (n_ < 3);
+    return keep_going_;
   }
 
   inline bool TerminationRequest() {
-        std::cerr << "CP3\n";
-    return true;
-  }  // Run forever (TODO(dkorolev): No, actually, return false here!).
+    return true;  // Run forever (TODO(dkorolev): No, actually, return false here!
+  }
+
+  // TODO(dkorolev): This is the hack to make the test pass.
+  atomic_bool keep_going_;
 
  private:
   Request http_request_scope_;  // Need to keep `Request` in scope, for the lifetime of the chunked response.
@@ -181,15 +176,21 @@ class ServeJSONOverHTTP {
 TEST(Sherlock, JSONOverHTTP) {
   auto time_series = sherlock::Stream<Point>("time_series");
   thread delayed_publishing_thread([&time_series]() {
-    for (int x = 10; x <= 20; ++x) {
+    for (int x = 10; x <= 13; ++x) {
       sleep_for(milliseconds(5));
       time_series.Publish(Point{x, x * x});
     }
   });
   HTTP(FLAGS_sherlock_http_test_port).Register("/time_series", [&time_series](Request r) {
-    auto tmp = time_series.Subscribe(ServeJSONOverHTTP<Point>(std::move(r)));  //->Detach();
-    while (true);
+    // TODO(dkorolev): Figure out how to best handle ownership of the parameter wrt destruction.
+    // For now it's a hack.
+    ServeJSONOverHTTP<Point> server(std::move(r));
+    auto tmp = time_series.Subscribe(server);  // TODO(dkorolev): `->Detach()`.
+    while (server.keep_going_) {
+      ;
+    }
   });
-  EXPECT_EQ("...", HTTP(GET(Printf("http://localhost:%d/time_series", FLAGS_sherlock_http_test_port))).body);
+  EXPECT_EQ("{\"point\":{\"x\":10,\"y\":100}}{\"point\":{\"x\":11,\"y\":121}}{\"point\":{\"x\":12,\"y\":144}}",
+            HTTP(GET(Printf("http://localhost:%d/time_series", FLAGS_sherlock_http_test_port))).body);
   delayed_publishing_thread.join();
 }
