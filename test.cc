@@ -97,7 +97,8 @@ TEST(Sherlock, NiceProcessorOfInts) {
   static_cast<void>(scope);
   // The `Nice*` processor will terminate right away, so it'll see one entry at best.
   EXPECT_LE(p.seen_, 1u);
-  EXPECT_EQ("", p.results_);
+  // Don't run more checks here since the processor is still running,
+  // and thus the results may be flaky.
 }
 
 TEST(Sherlock, WaitingProcessorOfInts) {
@@ -193,4 +194,6 @@ TEST(Sherlock, JSONOverHTTP) {
   EXPECT_EQ("{\"point\":{\"x\":10,\"y\":100}}{\"point\":{\"x\":11,\"y\":121}}{\"point\":{\"x\":12,\"y\":144}}",
             HTTP(GET(Printf("http://localhost:%d/time_series", FLAGS_sherlock_http_test_port))).body);
   delayed_publishing_thread.join();
+  HTTP(FLAGS_sherlock_http_test_port)
+      .UnRegister("/time_series");  // TODO(dkorolev): Make use of a scoped version.
 }
