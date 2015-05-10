@@ -134,7 +134,7 @@ struct APIWrapper : apicalls::APICallsWrapper<
     
     explicit MQMessageFunction(const T_USER_FUNCTION function) : function(function) {}
 
-    virtual void Process(YodaContainer<YT>& container, T_CONTAINER_WRAPPER& container_wrapper, typename YT::T_STREAM_TYPE&) override {
+    virtual void Process(YodaContainer<YT>& /*container*/, T_CONTAINER_WRAPPER& container_wrapper, typename YT::T_STREAM_TYPE&) override {
       function(container_wrapper);
     }
   };

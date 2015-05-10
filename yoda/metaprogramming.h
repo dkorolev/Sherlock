@@ -120,8 +120,8 @@ struct ContainerWrapper {
   explicit ContainerWrapper(YodaContainer<YT>& container) : container(container) {}
 
   template <typename... XS>
-  decltype(container(std::declval<XS>()...)) operator[](XS&&... xs) const {
-    return container(xs...);
+  decltype(std::declval<YodaContainer<YT>>()(std::declval<XS>()...)) operator[](XS&&... xs) const {
+    return container(std::forward<XS...>(xs...));
   }
 
 private:
