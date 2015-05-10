@@ -30,10 +30,14 @@ SOFTWARE.
 #ifndef SHERLOCK_YODA_METAPROGRAMMING_H
 #define SHERLOCK_YODA_METAPROGRAMMING_H
 
+#include <utility>
+
 #include "../sherlock.h"
 
 #include "../../Bricks/template/metaprogramming.h"
 #include "../../Bricks/mq/inmemory/mq.h"
+
+struct BAZINGA {};
 
 // The best way I found to have clang++ dump the actual type in error message. -- D.K.
 // Usage: static_assert(sizeof(is_same_or_compile_error<A, B>), "");
@@ -120,8 +124,13 @@ struct ContainerWrapper {
   explicit ContainerWrapper(YodaContainer<YT>& container) : container(container) {}
 
   template <typename... XS>
-  decltype(std::declval<YodaContainer<YT>>()(std::declval<XS>()...)) operator[](XS&&... xs) const {
-    return container(std::forward<XS...>(xs...));
+  decltype(std::declval<YodaContainer<YT>>()(std::declval<XS>()...)) CallBAZINGA(XS&&... xs) const {
+    return container(std::forward<XS>(xs)...);
+  }
+
+  template <typename... XS>
+  decltype(std::declval<YodaContainer<YT>>()(std::declval<BAZINGA>(), std::declval<XS>()...)) HiddenCallBAZINGA(XS&&... xs) const {
+    return container(BAZINGA(), std::forward<XS>(xs)...);
   }
 
 private:

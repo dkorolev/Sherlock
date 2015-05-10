@@ -205,14 +205,14 @@ struct Container<YT, KeyEntry<ENTRY>> {
   }
 
   // Synchronous `Get()` to be used in user functions.
-  const typename YET::T_ENTRY& operator()(const typename YET::T_KEY& key) const {
+  const typename YET::T_ENTRY& operator()(BAZINGA, const typename YET::T_KEY& key) const {
     const auto cit = map_.find(key);
     if (cit != map_.end()) {
       // The entry has been found.
       return cit->second;
     } else {
       // The entry has not been found.
-      throw YET::T_KEY_NOT_FOUND_EXCEPTION();
+      throw typename YET::T_KEY_NOT_FOUND_EXCEPTION(key);
     }
   }
 
