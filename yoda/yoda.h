@@ -123,12 +123,16 @@ struct APIWrapper
 
   // Asynchronous user function calling functionality.
   typedef ContainerWrapper<YT> T_CONTAINER_WRAPPER;
-  typedef std::function<void(T_CONTAINER_WRAPPER& container_wrapper)> T_USER_FUNCTION;
 
+  template <typename RETURN_VALUE>
+  using T_USER_FUNCTION = std::function<RETURN_VALUE(T_CONTAINER_WRAPPER& container_wrapper)>;
+
+  template <typename RETURN_VALUE>
   struct MQMessageFunction : YodaMMQMessage<YT> {
-    const T_USER_FUNCTION function;
+    typedef RETURN_VALUE T_RETURN_VALUE;
+    const T_USER_FUNCTION<T_RETURN_VALUE> function;
 
-    explicit MQMessageFunction(const T_USER_FUNCTION function) : function(function) {}
+    explicit MQMessageFunction(const T_USER_FUNCTION<T_RETURN_VALUE> function) : function(function) {}
 
     virtual void Process(YodaContainer<YT>&,
                          T_CONTAINER_WRAPPER& container_wrapper,
@@ -137,7 +141,43 @@ struct APIWrapper
     }
   };
 
-  void Call(const T_USER_FUNCTION function) { mq_.EmplaceMessage(new MQMessageFunction(function)); }
+  template <typename RETURN_VALUE, typename NEXT>
+  struct MQMessageFunctionWithHappyEnding : YodaMMQMessage<YT> {
+    typedef RETURN_VALUE T_RETURN_VALUE;
+    typedef NEXT T_NEXT;
+    const T_USER_FUNCTION<T_RETURN_VALUE> function;
+    NEXT next;
+
+    MQMessageFunctionWithHappyEnding(const T_USER_FUNCTION<T_RETURN_VALUE> function,
+                                     NEXT&& next)
+      : function(function),  // TODO(mzhurovich): Why not `std::forward<>`?
+        next(std::forward<NEXT>(next)) {}
+
+    virtual void Process(YodaContainer<YT>&,
+                         T_CONTAINER_WRAPPER& container_wrapper,
+                         typename YT::T_STREAM_TYPE&) override {
+      next(function(container_wrapper));
+    }
+  };
+
+  template <typename T_TYPED_USER_FUNCTION>
+  void Call(T_TYPED_USER_FUNCTION&& function) {
+    // This `&` at the end of `std::declval<T_CONTAINER_WRAPPER&>` should really go away.
+    using T_RETURN_TYPE = decltype(function(std::declval<T_CONTAINER_WRAPPER&>()));
+    mq_.EmplaceMessage(new MQMessageFunction<T_RETURN_TYPE>(function));
+  }
+
+  template <typename T_TYPED_USER_FUNCTION, typename T_NEXT_USER_FUNCTION>
+  void Call(T_TYPED_USER_FUNCTION&& function, T_NEXT_USER_FUNCTION&& next) {
+    // This `&` at the end of `std::declval<T_CONTAINER_WRAPPER&>` should really go away.
+    using T_INTERMEDIATE_TYPE = decltype(function(std::declval<T_CONTAINER_WRAPPER&>()));
+    // Question: Why don't we always pass extended references and use `std::forward`?
+    // Real user benefit: Can both pass in a lambda, a name function, and an instance of a class
+    // with `operator()` overloaded. And all three are worth unit-testing!
+    mq_.EmplaceMessage(new MQMessageFunctionWithHappyEnding<T_INTERMEDIATE_TYPE, T_NEXT_USER_FUNCTION>(
+      std::forward<T_TYPED_USER_FUNCTION>(function),
+      std::forward<T_NEXT_USER_FUNCTION>(next)));
+  }
 
  private:
   typename YT::T_STREAM_TYPE stream_;
